@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>スペリングビー 文字組立 ゲーム</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+<div class="max-w-lg mx-auto p-4">
+  <h1 class="text-2xl font-bold text-gray-800 mb-1">スペリングビー</h1>
+  <p class="text-sm text-gray-500 mb-4">中心の文字を必ず使って単語を作ろう（4文字以上）</p>
+
+  <!-- ハニカム -->
+  <div class="bg-white rounded-xl shadow-md p-5 mb-4 text-center">
+    <svg id="honeycomb" width="200" height="200" viewBox="0 0 200 200" class="mx-auto mb-4"></svg>
+
+    <!-- 入力 -->
+    <div class="flex justify-center items-center gap-2 mb-3">
+      <div id="input-display"
+        class="flex-1 max-w-xs border-2 border-blue-300 rounded-lg px-4 py-2 text-xl font-bold text-gray-800 text-center font-mono min-h-[48px] bg-blue-50 tracking-widest">
+      </div>
+    </div>
+    <div class="flex justify-center gap-2 flex-wrap mb-3">
+      <button onclick="deleteLetter()" aria-label="1文字削除"
+        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300">⌫</button>
+      <button onclick="shuffleLetters()" aria-label="シャッフル"
+        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300">🔀</button>
+      <button onclick="submitWord()" aria-label="単語を提出"
+        class="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700">送信</button>
+    </div>
+    <div id="message" class="text-sm font-medium min-h-[20px]"></div>
+  </div>
+
+  <!-- スコア・ランク -->
+  <div class="bg-white rounded-xl shadow-md p-4 mb-4">
+    <div class="flex justify-between items-center mb-2">
+      <div>
+        <span class="text-sm text-gray-500">スコア: </span>
+        <span id="score-val" class="text-2xl font-bold text-blue-600">0</span>
+      </div>
+      <div id="rank-badge" class="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-bold">Beginner</div>
+    </div>
+    <div class="w-full bg-gray-100 rounded-full h-2 mb-1">
+      <div id="rank-bar" class="h-2 rounded-full bg-blue-500 transition-all" style="width:0%"></div>
+    </div>
+    <div id="rank-hint" class="text-xs text-gray-400"></div>
+  </div>
+
+  <!-- 見つけた単語 -->
+  <div class="bg-white rounded-xl shadow-md p-4">
+    <div class="flex justify-between items-center mb-2">
+      <h2 class="text-sm font-semibold text-gray-600 uppercase">見つけた単語</h2>
+      <span id="found-count" class="text-sm text-gray-400">0語</span>
+    </div>
+    <div id="found-words" class="flex flex-wrap gap-2"></div>
+  </div>
+</div>
+
+<script>
+function escapeHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// 内蔵単語リスト（240語以上）
+const WORD_LIST = [
+  'able','acid','aged','also','arch','area','aunt','back','bale','ball','band','bang',
+  'bank','bare','barn','base','bath','bead','beak','beam','bean','bear','beat','beef',
+  'bell','belt','bend','best','bike','bill','bird','bite','blade','blank','blaze',
+  'bless','blot','blue','boat','bold','bolt','bond','bone','book','boot','bore','born',
+  'both','bold','bowl','bred','brew','brow','bulk','bull','burn','bush','cake','calf',
+  'call','calm','came','camp','cane','cape','card','care','cart','case','cash','cast',
+  'cave','ceil','cell','chat','chef','chin','chip','clam','clap','claw','clay','clip',
+  'clop','club','clue','coal','coat','code','coil','cold','colt','come','cook','cool',
+  'cope','copy','cord','core','corn','cost','cove','crab','crew','crop','crow','cube',
+  'curb','cure','curl','damp','dark','darn','dart','dash','date','dawn','dead','deaf',
+  'deal','dean','deck','deed','deep','deem','dent','desk','dike','dill','dime','dine',
+  'dirt','dish','disk','doll','dome','done','door','dope','dove','drag','draw','drew',
+  'drip','drop','drum','duck','dune','dusk','dust','each','earl','earn','ease','east',
+  'edge','else','emit','epic','even','ever','exam','face','fail','fair','fall','fame',
+  'farm','fast','fate','fawn','feed','feel','fell','felt','fern','file','fill','film',
+  'find','fine','firm','fish','fist','five','flag','flat','flaw','fled','flew','flit',
+  'flop','flow','foal','foam','foil','fold','font','fond','food','fool','ford','fore',
+  'fork','form','fort','foul','four','fowl','free','from','fuel','full','fume','fund',
+  'fuse','gale','game','gang','gaze','gear','gene','gill','give','glad','glen','glow',
+  'glue','goat','gold','golf','gone','good','gore','gown','grab','gram','gray','grew',
+  'grin','grip','grow','gust','half','hall','halt','hand','hang','hard','hare','harp',
+  'hate','have','hawk','head','heal','heap','heat','heel','helm','help','herb','herd',
+  'hide','high','hill','hint','hire','hold','hole','home','hook','hope','horn','host',
+  'hour','hove','huge','hull','hump','hung','hunt','hurl','hurt','idea','idle','inch',
+  'iron','isle','jade','jail','jolt','jump','june','just','keen','keep','kick','kind',
+  'king','knob','knot','know','lace','lack','lake','lamb','lamp','lane','lash','lath',
+  'lead','leaf','leak','lean','leap','left','lend','lent','less','lick','life','lift',
+  'lime','line','link','lion','list','loft','lone','long','look','loom','loop','lore',
+  'lose','loss','lost','loud','love','luck','lung','lure','lust','mace','made','maid',
+  'mail','main','make','male','mall','malt','mane','mare','mark','mash','mask','mast',
+  'mate','meal','mean','meat','meet','melt','mere','mesh','mild','mile','milk','mill',
+  'mind','mine','mint','mist','moat','mock','mode','mold','monk','moon','mope','more',
+  'moss','most','moth','much','muck','mugs','mule','musk','nail','name','nave','navy',
+  'nest','nice','nine','node','none','norm','nose','note','oath','oboe','odds','once',
+  'open','over','oven','pack','page','pail','pain','pale','palm','pane','part','pass',
+  'past','path','pave','peak','peel','pelt','pend','perk','pern','pest','pick','pier',
+  'pile','pill','pine','pipe','plan','plod','plop','plot','plow','plug','plum','plus',
+  'poem','poet','pole','poll','pond','pore','port','post','pour','prey','prim','prod',
+  'prop','pull','pump','pure','push','race','rack','rage','rail','rain','rake','ramp',
+  'rang','rank','rate','read','real','reap','ream','reel','rein','rely','rend','rent',
+  'rest','rice','rich','ride','riff','ring','rise','risk','roam','roar','robe','rock',
+  'rode','role','roll','roof','room','root','rope','rose','ruin','rule','rung','rush',
+  'rust','safe','sage','sail','sake','sale','salt','sand','sane','sang','sank','save',
+  'scan','scar','seal','seam','seed','seek','self','sell','send','sent','shed','shin',
+  'ship','shoe','shop','shot','show','sick','sigh','silk','sill','silt','sing','sink',
+  'slab','slam','slap','slat','slip','slot','slow','slug','snap','snow','soak','soap',
+  'soar','sock','soil','sole','some','song','sore','sort','soul','soup','sour','sown',
+  'span','spar','spin','spot','spur','stag','star','stay','stem','step','stew','stir',
+  'stop','stub','suck','suit','sulk','sung','sunk','surf','swan','swam','swap','swat',
+  'swim','tale','tall','tame','task','team','tear','tell','tend','tent','term','test',
+  'than','them','then','this','tide','tile','till','time','tire','toad','toll','tomb',
+  'tone','tool','tops','tore','torn','toss','toil','tour','town','tree','trim','trip',
+  'trot','tuck','tuft','tug','tune','turf','turn','tusk','twin','twig','type','ulna',
+  'upon','urge','used','vain','vane','veil','vein','vest','view','vine','void','volt',
+  'wade','wage','wail','wake','wane','ward','warm','wart','wary','wave','weak','weal',
+  'wean','weed','well','welt','went','wept','west','what','when','whip','wide','wife',
+  'wild','wilt','wine','wing','wink','wipe','wire','wise','wish','with','woke','wolf',
+  'wood','wool','word','wore','work','worm','worn','wrap','wren','yawn','year','yell',
+  'yoke','yore','zeal','zero','zinc','zone','zoom'
+];
+
+const RANK_THRESHOLDS = [
+  { name: 'Beginner', minPct: 0 },
+  { name: 'Moving Up', minPct: 5 },
+  { name: 'Good', minPct: 15 },
+  { name: 'Solid', minPct: 25 },
+  { name: 'Amazing', minPct: 40 },
+  { name: 'Genius', minPct: 70 },
+];
+
+let centerLetter = '';
+let outerLetters = [];
+let currentInput = '';
+let foundWords = new Set();
+let score = 0;
+let validWords = [];
+let totalPossibleScore = 0;
+
+function initPuzzle() {
+  // 日付シードでランダム生成
+  const today = new Date();
+  const seed = today.getFullYear() * 10000 + (today.getMonth()+1) * 100 + today.getDate();
+  const rng = seededRand(seed);
+
+  // 有効な7文字セットを探す
+  const alphabet = 'abcdefghijklmnoprstuw';
+  let tries = 0;
+  while (tries < 100) {
+    tries++;
+    const letters = [];
+    const used = new Set();
+    for (let i = 0; i < 7; i++) {
+      let c;
+      do { c = alphabet[Math.floor(rng() * alphabet.length)]; } while (used.has(c));
+      used.add(c);
+      letters.push(c);
+    }
+    centerLetter = letters[0];
+    outerLetters = letters.slice(1);
+
+    // 有効単語を計算
+    validWords = WORD_LIST.filter(w =>
+      w.length >= 4 &&
+      w.includes(centerLetter) &&
+      w.split('').every(c => letters.includes(c))
+    );
+
+    if (validWords.length >= 8) break;
+  }
+
+  totalPossibleScore = validWords.reduce((sum, w) => sum + wordScore(w), 0);
+  foundWords = new Set();
+  score = 0;
+  currentInput = '';
+
+  drawHoneycomb();
+  updateDisplay();
+}
+
+function seededRand(seed) {
+  let s = seed;
+  return function() {
+    s = (s * 1664525 + 1013904223) & 0xFFFFFFFF;
+    return (s >>> 0) / 0xFFFFFFFF;
+  };
+}
+
+function wordScore(w) {
+  if (w.length === 4) return 1;
+  const allLetters = [centerLetter, ...outerLetters];
+  const isPangram = allLetters.every(l => w.includes(l));
+  return w.length + (isPangram ? 7 : 0);
+}
+
+function drawHoneycomb() {
+  const svg = document.getElementById('honeycomb');
+  svg.innerHTML = '';
+  const cx = 100, cy = 100;
+  const r = 30;
+
+  // ハニカム位置（中心+6外側）
+  const positions = [
+    { x: cx, y: cy, center: true },
+    { x: cx, y: cy - 2*r*0.866 },
+    { x: cx + r*1.5, y: cy - r*0.866 },
+    { x: cx + r*1.5, y: cy + r*0.866 },
+    { x: cx, y: cy + 2*r*0.866 },
+    { x: cx - r*1.5, y: cy + r*0.866 },
+    { x: cx - r*1.5, y: cy - r*0.866 },
+  ];
+
+  const letters = [centerLetter, ...outerLetters];
+
+  positions.forEach((pos, i) => {
+    const hex = createHexagon(pos.x, pos.y, r - 2, pos.center ? '#f59e0b' : '#e5e7eb', letters[i]);
+    hex.addEventListener('click', () => addLetter(letters[i]));
+    svg.appendChild(hex);
+  });
+}
+
+function createHexagon(cx, cy, r, fill, letter) {
+  const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+  g.style.cursor = 'pointer';
+
+  const points = [];
+  for (let i = 0; i < 6; i++) {
+    const angle = Math.PI / 180 * (60 * i - 30);
+    points.push((cx + r * Math.cos(angle)) + ',' + (cy + r * Math.sin(angle)));
+  }
+
+  const poly = document.createElementNS('http://www.w3.org/2000/svg','polygon');
+  poly.setAttribute('points', points.join(' '));
+  poly.setAttribute('fill', fill);
+  poly.setAttribute('stroke', '#d1d5db');
+  poly.setAttribute('stroke-width', '1');
+
+  const text = document.createElementNS('http://www.w3.org/2000/svg','text');
+  text.setAttribute('x', cx);
+  text.setAttribute('y', cy + 5);
+  text.setAttribute('text-anchor', 'middle');
+  text.setAttribute('font-size', '16');
+  text.setAttribute('font-weight', 'bold');
+  text.setAttribute('font-family', 'monospace');
+  text.setAttribute('fill', fill === '#f59e0b' ? '#92400e' : '#374151');
+  text.textContent = letter.toUpperCase();
+
+  g.appendChild(poly);
+  g.appendChild(text);
+  return g;
+}
+
+function addLetter(l) {
+  currentInput += l;
+  updateInputDisplay();
+}
+
+function deleteLetter() {
+  currentInput = currentInput.slice(0, -1);
+  updateInputDisplay();
+}
+
+function shuffleLetters() {
+  outerLetters = outerLetters.sort(() => Math.random() - 0.5);
+  drawHoneycomb();
+}
+
+function updateInputDisplay() {
+  const el = document.getElementById('input-display');
+  el.textContent = currentInput.toUpperCase();
+}
+
+function showMessage(msg, color = 'text-gray-600') {
+  const el = document.getElementById('message');
+  el.textContent = msg;
+  el.className = 'text-sm font-medium min-h-[20px] ' + color;
+  setTimeout(() => { el.textContent = ''; }, 2000);
+}
+
+function submitWord() {
+  const word = currentInput.toLowerCase();
+  currentInput = '';
+  updateInputDisplay();
+
+  if (word.length < 4) { showMessage('4文字以上必要です', 'text-orange-500'); return; }
+  if (!word.includes(centerLetter)) { showMessage('中心文字「' + centerLetter.toUpperCase() + '」が必要です', 'text-red-500'); return; }
+  if (foundWords.has(word)) { showMessage('すでに見つけています！', 'text-orange-400'); return; }
+  if (!validWords.includes(word)) { showMessage('辞書にありません', 'text-red-500'); return; }
+
+  const allLetters = [centerLetter, ...outerLetters];
+  if (!word.split('').every(c => allLetters.includes(c))) {
+    showMessage('使用できない文字が含まれています', 'text-red-500'); return;
+  }
+
+  const ws = wordScore(word);
+  score += ws;
+  foundWords.add(word);
+
+  const isPangram = allLetters.every(l => word.includes(l));
+  if (isPangram) {
+    showMessage('🌟 パングラム！ +' + ws + '点', 'text-purple-600');
+  } else {
+    showMessage('+' + ws + '点 ' + word.toUpperCase(), 'text-green-600');
+  }
+
+  updateDisplay();
+}
+
+function updateDisplay() {
+  document.getElementById('score-val').textContent = score;
+
+  const pct = totalPossibleScore > 0 ? score / totalPossibleScore * 100 : 0;
+  let rank = RANK_THRESHOLDS[0];
+  let nextRank = null;
+  for (let i = 0; i < RANK_THRESHOLDS.length; i++) {
+    if (pct >= RANK_THRESHOLDS[i].minPct) {
+      rank = RANK_THRESHOLDS[i];
+      nextRank = RANK_THRESHOLDS[i+1] || null;
+    }
+  }
+  document.getElementById('rank-badge').textContent = rank.name;
+  document.getElementById('rank-bar').style.width = Math.min(100, pct) + '%';
+
+  if (nextRank) {
+    const needed = Math.ceil(totalPossibleScore * nextRank.minPct / 100) - score;
+    document.getElementById('rank-hint').textContent = nextRank.name + 'まであと' + needed + '点';
+  } else {
+    document.getElementById('rank-hint').textContent = '最高ランク達成！';
+  }
+
+  const foundContainer = document.getElementById('found-words');
+  foundContainer.innerHTML = '';
+  document.getElementById('found-count').textContent = foundWords.size + '語';
+  [...foundWords].sort().forEach(w => {
+    const allLetters = [centerLetter, ...outerLetters];
+    const isPangram = allLetters.every(l => w.includes(l));
+    const span = document.createElement('span');
+    span.className = 'px-2 py-1 rounded-full text-xs font-medium ' +
+      (isPangram ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600');
+    span.textContent = w.toUpperCase();
+    foundContainer.appendChild(span);
+  });
+}
+
+// キーボード入力
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { submitWord(); return; }
+  if (e.key === 'Backspace') { deleteLetter(); return; }
+  if (/^[a-zA-Z]$/.test(e.key)) {
+    const l = e.key.toLowerCase();
+    const allLetters = [centerLetter, ...outerLetters];
+    if (allLetters.includes(l)) addLetter(l);
+  }
+});
+
+initPuzzle();
+</script>
+</body>
+</html>
